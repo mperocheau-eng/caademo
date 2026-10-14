@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Partager ma position</title>
+  <style>
+    body {
+      font: 16px/1.5 system-ui, sans-serif;
+      color: #182230;
+      max-width: 540px;
+      margin: 8vh auto;
+      padding: 24px;
+    }
+    button, input { font: inherit; }
+    button {
+      padding: 13px 18px;
+      border: 0;
+      border-radius: 8px;
+      background: #0759c7;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .field { margin: 22px 0; }
+    #status { margin-top: 18px; }
+    .hint { color: #536273; font-size: .94rem; }
+  </style>
+</head>
+<body>
+  <h1>Partager ma position</h1>
+  <p>
+    Envoyez votre position à notre équipe pour qu’elle puisse vous localiser.
+    Vous pouvez aussi joindre une photo de votre véhicule ou de son emplacement.
+  </p>
+
+  <div class="field">
+    <button id="locationButton" type="button">Obtenir ma position</button>
+    <p id="locationStatus" class="hint">Aucune position obtenue pour l’instant.</p>
+  </div>
+
+  <div class="field">
+    <label for="photo"><strong>Ajouter une photo (facultatif)</strong></label><br>
+    <input id="photo" type="file" accept="image/*" capture="environment">
+    <p id="photoStatus" class="hint">Vous pourrez prendre une photo ou en choisir une.</p>
+  </div>
+
+  <div class="field">
+    <button id="sendButton" type="button" disabled>Envoyer à l’équipe</button>
+  </div>
+
+  <p id="status" role="status" aria-live="polite"></p>
+
+  <script>
+    // Remplacez par l'URL réelle du webhook Infinity.
+    const WEBHOOK_URL = "COLLEZ_ICI_URL_WEBHOOK_INFINITY";
+
+    // Le lien SMS doit ressembler à :
+    // https://votre-site.example/location.html?token=JETON_UNIQUE
+    const token = new URLSearchParams(window.location.search).get("token");
+
+    const locationButton = document.querySelector("#locationButton");
+    const sendButton = document.querySelector("#sendButton");
+    const locationStatus = document.querySelector("#locationStatus");
+    const photoInput = document.querySelector("#photo");
+    const photoStatus = document.querySelector("#photoStatus");
+    const status = document.querySelector("#status");
+
+    let customerLocation = null;
+
+    if (!token) {
+      status.textContent = "Lien invalide. Veuillez contacter notre équipe.";
+      locationButton.disabled = true;
+    }
+
+    locationButton.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        locationStatus.textContent =
+          "La géolocalisation n’est pas disponible dans ce navigateur.";
+        return;
+      }
+
+      locationButton.disabled = true;
+      locationStatus.textContent = "Demande de position en cours…";
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          customerLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyMeters: position.coords.accuracy,
+            capturedAt: new Date(position.timestamp).toISOString()
+          };
+
+          locationStatus.textContent =
+            "Position obtenue. Précision estimée : environ " +
+            Math.round(customerLocation.accuracyMeters) + " m.";
+          sendButton.disabled = false;
+          locationButton.disabled = false;
+        },
+        (error) => {
+          const messages = {
+            1: "Autorisation refusée. Autorisez la localisation ou appelez-nous.",
+            2: "Position indisponible. Réessayez ou appelez-nous.",
+            3: "La demande a expiré. Réessayez."
+          };
+          locationStatus.textContent =
+            messages[error.code] || "Impossible d’obtenir votre position.";
+          locationButton.disabled = false;
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+    });
+
+    photoInput.addEventListener("change", () => {
+      const file = photoInput.files[0];
+      photoStatus.textContent = file
+        ? "Photo sélectionnée : " + file.name
+        : "Aucune photo sélectionnée.";
+    });
+
+    // Réduit les photos afin de limiter la taille envoyée au workflow.
+    async function photoAsDataUrl(file) {
+      if (!file) return null;
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Veuillez sélectionner une image.");
+      }
+      if (file.size > 12 * 1024 * 1024) {
+        throw new Error("La photo dépasse 12 Mo. Choisissez une photo plus petite.");
+      }
+
+      const image = await createImageBitmap(file);
+      const maxSide = 1600;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      image.close();
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          result => result ? resolve(result) : reject(new Error("Compression impossible.")),
+          "image/jpeg",
+          0.78
+        );
+      });
+
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Lecture de la photo impossible."));
+        reader.readAsDataURL(blob);
+      });
+
+      return {
+        filename: "photo-client.jpg",
+        contentType: "image/jpeg",
+        dataUrl
+      };
+    }
+
+    sendButton.addEventListener("click", async () => {
+      if (!customerLocation || !token) return;
+
+      if (WEBHOOK_URL.includes("COLLEZ_ICI")) {
+        status.textContent = "L’URL du webhook Infinity n’a pas encore été configurée.";
+        return;
+      }
+
+      sendButton.disabled = true;
+      locationButton.disabled = true;
+      status.textContent = "Envoi en cours…";
+
+      try {
+        const photo = await photoAsDataUrl(photoInput.files[0]);
+
+        const payload = {
+          token,
+          location: customerLocation,
+          photo,
+          submittedAt: new Date().toISOString()
+        };
+
+        const response = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error("Le service n’a pas accepté l’envoi (HTTP " + response.status + ").");
+        }
+
+        status.textContent = "Merci. Votre position a été envoyée à notre équipe.";
+        sendButton.textContent = "Informations envoyées";
+      } catch (error) {
+        status.textContent =
+          error.message || "Échec de l’envoi. Veuillez nous appeler.";
+        sendButton.disabled = false;
+        locationButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
