@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roadside Dispatch — Demo</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  >
+
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #687386;
+      --line: #e5e9f0;
+      --blue: #315be8;
+      --blue-dark: #2347c5;
+      --green: #138a5b;
+      --bg: #f4f6fa;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.45 Inter, ui-sans-serif, system-ui, -apple-system,
+            BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button { font: inherit; }
+
+    .topbar {
+      height: 68px;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-weight: 750;
+      letter-spacing: -.3px;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: var(--blue);
+      border-radius: 11px;
+      font-size: 19px;
+    }
+
+    .demo-pill {
+      color: #8a5b06;
+      background: #fff5d9;
+      border: 1px solid #f2dfaa;
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    main {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 27px 28px 32px;
+    }
+
+    .heading {
+      margin-bottom: 21px;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0 0 5px;
+      font-size: clamp(24px, 3vw, 32px);
+      line-height: 1.15;
+      letter-spacing: -1px;
+    }
+
+    .subtitle { margin: 0; color: var(--muted); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 370px minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .panel, .map-panel {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 5px 20px rgba(24, 39, 75, .045);
+      overflow: hidden;
+    }
+
+    .panel { padding: 21px; }
+
+    .section-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 750;
+    }
+
+    .eyebrow {
+      margin: 20px 0 8px;
+      color: #8791a2;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .location-box {
+      display: flex;
+      gap: 11px;
+      align-items: flex-start;
+      padding: 13px;
+      background: #f7f8fc;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+    }
+
+    .location-pin {
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      display: grid;
+      place-items: center;
+      background: #e9edff;
+      border-radius: 9px;
+    }
+
+    .location-name { font-weight: 700; }
+    .location-note { margin-top: 2px; color: var(--muted); font-size: 12px; }
+
+    .dispatch-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .dispatch-card {
+      width: 100%;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      text-align: left;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s, transform .15s;
+    }
+
+    .dispatch-card:hover { transform: translateY(-1px); border-color: #a9b9fa; }
+    .dispatch-card.selected { background: #f5f7ff; border: 1.5px solid var(--blue); }
+
+    .truck-icon {
+      width: 38px;
+      height: 38px;
+      flex: 0 0 38px;
+      display: grid;
+      place-items: center;
+      background: #f0f2f6;
+      border-radius: 10px;
+      font-size: 19px;
+    }
+
+    .dispatch-card.selected .truck-icon { background: #e8edff; }
+
+    .dispatch-info { min-width: 0; flex: 1; }
+    .dispatch-name { font-weight: 720; }
+    .dispatch-detail { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .distance { text-align: right; font-weight: 750; white-space: nowrap; }
+    .available { color: var(--green); font-size: 11px; font-weight: 700; }
+
+    .closest-tag {
+      display: inline-block;
+      margin-left: 5px;
+      padding: 2px 6px;
+      color: var(--blue-dark);
+      background: #e9edff;
+      border-radius: 5px;
+      font-size: 10px;
+      font-weight: 800;
+      vertical-align: 1px;
+    }
+
+    .primary, .secondary {
+      width: 100%;
+      min-height: 45px;
+      border: 0;
+      border-radius: 10px;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    .primary {
+      margin-top: 17px;
+      color: #fff;
+      background: var(--blue);
+      box-shadow: 0 5px 12px rgba(49, 91, 232, .18);
+    }
+
+    .primary:hover { background: var(--blue-dark); }
+    .primary:disabled { cursor: default; opacity: .65; }
+
+    .secondary {
+      margin-top: 9px;
+      color: #4f5b70;
+      background: #f2f4f8;
+    }
+
+    .status-note {
+      min-height: 38px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .map-panel {
+      min-height: 590px;
+      position: relative;
+    }
+
+    #map { position: absolute; inset: 0; }
+
+    .map-status {
+      position: absolute;
+      z-index: 500;
+      top: 15px;
+      left: 15px;
+      max-width: calc(100% - 30px);
+      padding: 11px 14px;
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(225,230,239,.95);
+      border-radius: 11px;
+      box-shadow: 0 3px 12px rgba(20, 31, 55, .12);
+      pointer-events: none;
+    }
+
+    .map-status-title { font-weight: 750; }
+    .map-status-sub { color: var(--muted); font-size: 12px; }
+
+    .eta-card {
+      position: absolute;
+      z-index: 500;
+      right: 15px;
+      bottom: 25px;
+      width: 205px;
+      padding: 14px 16px;
+      background: rgba(255,255,255,.97);
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      box-shadow: 0 4px 16px rgba(20, 31, 55, .14);
+    }
+
+    .eta-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .eta-time { margin: 2px 0; font-size: 29px; font-weight: 800; letter-spacing: -1px; }
+    .eta-foot { color: var(--muted); font-size: 11px; }
+
+    .map-legend {
+      position: absolute;
+      z-index: 500;
+      left: 15px;
+      bottom: 20px;
+      padding: 9px 11px;
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      color: #536073;
+      font-size: 11px;
+    }
+
+    .legend-row { display: flex; align-items: center; gap: 7px; }
+    .legend-row + .legend-row { margin-top: 5px; }
+    .legend-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); }
+    .legend-dest { background: #e64d59; }
+
+    .truck-marker {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      background: #fff;
+      border: 2px solid var(--blue);
+      border-radius: 50%;
+      box-shadow: 0 2px 9px #1c2d4c55;
+      font-size: 20px;
+    }
+
+    .destination-marker {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      background: #e64d59;
+      color: #fff;
+      border: 3px solid white;
+      border-radius: 50% 50% 50% 0;
+      box-shadow: 0 2px 8px #1c2d4c55;
+      transform: rotate(-45deg);
+      font-size: 14px;
+    }
+
+    .destination-marker span { transform: rotate(45deg); }
+
+    .footer-note {
+      margin: 14px 2px 0;
+      color: #7d8797;
+      font-size: 11px;
+    }
+
+    @media (max-width: 900px) {
+      main { padding: 21px 16px; }
+      .layout { grid-template-columns: 1fr; }
+      .map-panel { min-height: 470px; order: -1; }
+    }
+
+    @media (max-width: 520px) {
+      .topbar { height: 60px; padding: 0 16px; }
+      .demo-pill { font-size: 10px; }
+      .heading { align-items: flex-start; flex-direction: column; }
+      .panel { padding: 16px; }
+      .map-panel { min-height: 410px; }
+      .eta-card { width: 155px; padding: 10px 12px; }
+      .eta-time { font-size: 24px; }
+      .map-legend { bottom: 15px; }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">↗</div>
+      <span>Roadside Dispatch</span>
+    </div>
+    <div class="demo-pill">DEMO SIMULATION</div>
+  </header>
+
+  <main>
+    <div class="heading">
+      <div>
+        <h1>Dispatch a tow truck</h1>
+        <p class="subtitle">Choose an available unit for this roadside request.</p>
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2 class="section-title">Service request</h2>
+
+        <div class="eyebrow">Pickup location</div>
+        <div class="location-box">
+          <div class="location-pin">📍</div>
+          <div>
+            <div class="location-name">Mississauga Road</div>
+            <div class="location-note">Just south of Burnhamthorpe Road West, Mississauga</div>
+          </div>
+        </div>
+
+        <div class="eyebrow">Available dispatches</div>
+        <div id="dispatchList" class="dispatch-list"></div>
+
+        <button id="dispatchButton" class="primary">Confirm selected dispatch</button>
+        <button id="resetButton" class="secondary" hidden>Reset demo</button>
+        <div id="statusNote" class="status-note" aria-live="polite">
+          The closest available unit is selected automatically.
+        </div>
+      </section>
+
+      <section class="map-panel" aria-label="Dispatch map">
+        <div id="map"></div>
+
+        <div class="map-status">
+          <div id="mapStatusTitle" class="map-status-title">Waiting for dispatch</div>
+          <div id="mapStatusSub" class="map-status-sub">Pickup location shown on map</div>
+        </div>
+
+        <div class="map-legend">
+          <div class="legend-row"><span class="legend-dot legend-dest"></span> Pickup location</div>
+          <div class="legend-row"><span class="legend-dot"></span> Dispatch / tow truck</div>
+        </div>
+
+        <div class="eta-card">
+          <div class="eta-label">Estimated arrival</div>
+          <div id="etaTime" class="eta-time">—</div>
+          <div id="etaFoot" class="eta-foot">Confirm a dispatch to begin</div>
+        </div>
+      </section>
+    </div>
+
+    <p class="footer-note">
+      Demo only — dispatch availability, distance, truck movement, and ETA are simulated.
+      Map data © OpenStreetMap contributors.
+    </p>
+  </main>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin="">
+  </script>
+
+  <script>
+    // Approximate demo coordinates: Mississauga Road, south of Burnhamthorpe Rd W.
+    const destination = L.latLng(43.5552, -79.6515);
+
+    const dispatches = [
+      { id: "D-104", name: "Unit 104", type: "Flatbed tow truck", position: [43.5710, -79.6560] },
+      { id: "D-218", name: "Unit 218", type: "Wheel-lift tow truck", position: [43.5635, -79.6785] },
+      { id: "D-307", name: "Unit 307", type: "Flatbed tow truck", position: [43.5815, -79.6350] }
+    ];
+
+    const map = L.map("map", { zoomControl: true }).setView(destination, 13);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    const destinationIcon = L.divIcon({
+      className: "",
+      html: '<div class="destination-marker"><span>!</span></div>',
+      iconSize: [30, 30],
+      iconAnchor: [15, 30]
+    });
+
+    const truckIcon = L.divIcon({
+      className: "",
+      html: '<div class="truck-marker">🚛</div>',
+      iconSize: [38, 38],
+      iconAnchor: [19, 19]
+    });
+
+    L.marker(destination, { icon: destinationIcon })
+      .addTo(map)
+      .bindPopup("<strong>Pickup location</strong><br>Mississauga Road, south of Burnhamthorpe");
+
+    function distanceKm(a, b) {
+      return L.latLng(a).distanceTo(L.latLng(b)) / 1000;
+    }
+
+    dispatches.forEach(d => {
+      d.distance = distanceKm(d.position, destination);
+      d.marker = L.marker(d.position)
+        .addTo(map)
+        .bindPopup(`<strong>${d.name}</strong><br>${d.type}<br>Available`);
+    });
+
+    dispatches.sort((a, b) => a.distance - b.distance);
+    let selectedId = dispatches[0].id;
+    let active = false;
+    let timer = null;
+    let routeLine = null;
+    let movingMarker = null;
+    let progress = 0;
+
+    const dispatchList = document.getElementById("dispatchList");
+    const dispatchButton = document.getElementById("dispatchButton");
+    const resetButton = document.getElementById("resetButton");
+    const statusNote = document.getElementById("statusNote");
+    const etaTime = document.getElementById("etaTime");
+    const etaFoot = document.getElementById("etaFoot");
+    const mapStatusTitle = document.getElementById("mapStatusTitle");
+    const mapStatusSub = document.getElementById("mapStatusSub");
+
+    function renderDispatches() {
+      dispatchList.innerHTML = "";
+
+      dispatches.forEach((d, index) => {
+        const button = document.createElement("button");
+        button.className = "dispatch-card" + (d.id === selectedId ? " selected" : "");
+        button.type = "button";
+        button.disabled = active;
+
+        button.innerHTML = `
+          <span class="truck-icon">🚛</span>
+          <span class="dispatch-info">
+            <span class="dispatch-name">${d.name}${index === 0 ? '<span class="closest-tag">CLOSEST</span>' : ""}</span>
+            <span class="dispatch-detail">${d.type}<br><span class="available">● Available</span></span>
+          </span>
+          <span class="distance">${d.distance.toFixed(1)} km</span>
+        `;
+
+        button.addEventListener("click", () => {
+          if (active) return;
+          selectedId = d.id;
+          renderDispatches();
+        });
+
+        dispatchList.appendChild(button);
+      });
+    }
+
+    renderDispatches();
+
+    // A simple illustrative route that follows the Mississauga Road corridor.
+    function makeRoute(start) {
+      const a = L.latLng(start);
+      const middleLat = (a.lat + destination.lat) / 2;
+      return [
+        a,
+        L.latLng(middleLat + 0.0012, a.lng - 0.0004),
+        L.latLng(destination.lat + 0.0014, destination.lng - 0.0002),
+        destination
+      ];
+    }
+
+    function pointAlongRoute(points, t) {
+      const lengths = [];
+      let total = 0;
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const length = points[i].distanceTo(points[i + 1]);
+        lengths.push(length);
+        total += length;
+      }
+
+      let remaining = total * t;
+
+      for (let i = 0; i < lengths.length; i++) {
+        if (remaining <= lengths[i]) {
+          const fraction = lengths[i] === 0 ? 0 : remaining / lengths[i];
+          return L.latLng(
+            points[i].lat + (points[i + 1].lat - points[i].lat) * fraction,
+            points[i].lng + (points[i + 1].lng - points[i].lng) * fraction
+          );
+        }
+        remaining -= lengths[i];
+      }
+
+      return points[points.length - 1];
+    }
+
+    function startDispatch() {
+      if (active) return;
+
+      const selected = dispatches.find(d => d.id === selectedId);
+      if (!selected) return;
+
+      active = true;
+      progress = 0;
+
+      const route = makeRoute(selected.position);
+      routeLine = L.polyline(route, {
+        color: "#315be8",
+        weight: 5,
+        opacity: 0.85,
+        dashArray: "10 8"
+      }).addTo(map);
+
+      movingMarker = L.marker(route[0], { icon: truckIcon, zIndexOffset: 1000 })
+        .addTo(map)
+        .bindPopup(`<strong>${selected.name}</strong><br>En route · Demo GPS`);
+
+      selected.marker.setOpacity(0.25);
+      map.fitBounds(L.latLngBounds(route).pad(0.22));
+
+      dispatchButton.textContent = "Dispatch confirmed";
+      dispatchButton.disabled = true;
+      resetButton.hidden = false;
+      statusNote.textContent = `${selected.name} is on the way. GPS and ETA are simulated.`;
+      mapStatusTitle.textContent = `${selected.name} is en route`;
+      mapStatusSub.textContent = "Simulated live GPS · Demo clock runs faster than real time";
+      etaTime.textContent = "24 min";
+      etaFoot.textContent = "Estimated time to pickup";
+
+      // Complete the 24-minute ETA in 2 minutes for the demo (12× demo clock).
+      const demoDurationMs = 120000;
+      const startedAt = Date.now();
+
+      timer = window.setInterval(() => {
+        progress = Math.min((Date.now() - startedAt) / demoDurationMs, 1);
+        movingMarker.setLatLng(pointAlongRoute(route, progress));
+
+        const remaining = Math.ceil(24 * (1 - progress));
+        etaTime.textContent = progress >= 1 ? "Arrived" : `${remaining} min`;
+
+        if (progress >= 1) {
+          window.clearInterval(timer);
+          timer = null;
+          movingMarker.setLatLng(destination);
+          mapStatusTitle.textContent = "Tow truck arrived";
+          mapStatusSub.textContent = "Demo journey complete";
+          etaFoot.textContent = "Simulation complete";
+          statusNote.textContent = `${selected.name} has arrived in the demo.`;
+        }
+      }, 1000);
+    }
+
+    function resetDemo() {
+      if (timer) window.clearInterval(timer);
+      timer = null;
+      active = false;
+      progress = 0;
+
+      if (routeLine) map.removeLayer(routeLine);
+      if (movingMarker) map.removeLayer(movingMarker);
+      routeLine = null;
+      movingMarker = null;
+
+      dispatches.forEach(d => d.marker.setOpacity(1));
+      selectedId = dispatches[0].id;
+
+      dispatchButton.disabled = false;
+      dispatchButton.textContent = "Confirm selected dispatch";
+      resetButton.hidden = true;
+      statusNote.textContent = "The closest available unit is selected automatically.";
+      mapStatusTitle.textContent = "Waiting for dispatch";
+      mapStatusSub.textContent = "Pickup location shown on map";
+      etaTime.textContent = "—";
+      etaFoot.textContent = "Confirm a dispatch to begin";
+
+      renderDispatches();
+      map.setView(destination, 13);
+    }
+
+    dispatchButton.addEventListener("click", startDispatch);
+    resetButton.addEventListener("click", resetDemo);
+
+    // Leaflet may need a size refresh after the responsive layout settles.
+    window.setTimeout(() => map.invalidateSize(), 200);
+  </script>
+</body>
+</html>
