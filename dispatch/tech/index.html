@@ -1,0 +1,910 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAA | Technician Scheduling</title>
+
+  <style>
+    :root {
+      --blue: #315be8;
+      --blue-hover: #2347c5;
+      --blue-soft: #eff3ff;
+      --blue-focus: #9db2ff;
+      --ink: #202a3b;
+      --muted: #687386;
+      --line: #e5e9f0;
+      --background: #f4f6fa;
+      --green: #138a5b;
+      --green-bg: #eaf7f1;
+      --red: #b42318;
+      --red-bg: #fff0ef;
+      --white: #fff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--ink);
+      font: 15px/1.5 Arial, Helvetica, sans-serif;
+    }
+
+    header {
+      min-height: 72px;
+      padding: 0 5%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: var(--white);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+
+    .brand-logo {
+      display: block;
+      width: 62px;
+      height: 42px;
+      object-fit: contain;
+    }
+
+    .header-label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    main {
+      width: min(1120px, 92%);
+      margin: 34px auto 60px;
+    }
+
+    .page-heading {
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 5px;
+      font-size: clamp(25px, 4vw, 34px);
+      letter-spacing: -.03em;
+    }
+
+    .subtitle,
+    .muted {
+      color: var(--muted);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 310px minmax(0, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 3px 12px rgba(20, 30, 40, .04);
+    }
+
+    .request-panel {
+      position: sticky;
+      top: 18px;
+      padding: 22px;
+    }
+
+    .panel h2 {
+      margin: 0 0 18px;
+      font-size: 18px;
+    }
+
+    .request-item {
+      padding: 14px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .request-item:first-of-type {
+      border-top: 0;
+    }
+
+    .label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-weight: 700;
+    }
+
+    .service-tag {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 5px 9px;
+      border-radius: 6px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .customer-status {
+      min-height: 18px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .customer-status.error {
+      padding: 8px;
+      border-radius: 7px;
+      background: var(--red-bg);
+      color: var(--red);
+    }
+
+    .availability-panel {
+      padding: 22px;
+    }
+
+    .availability-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+
+    .availability-heading h2 {
+      margin-bottom: 3px;
+    }
+
+    .count {
+      flex: 0 0 auto;
+      padding: 7px 10px;
+      border-radius: 20px;
+      background: var(--green-bg);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .slot-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 18px 0;
+      padding: 14px 16px;
+      border: 1px solid #dce5ff;
+      border-radius: 10px;
+      background: var(--blue-soft);
+    }
+
+    .slot-icon {
+      font-size: 22px;
+    }
+
+    .slot-title {
+      font-weight: 800;
+    }
+
+    .slot-subtitle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tech-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .tech-card {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+
+    .tech-card.selected {
+      padding: 15px;
+      border: 2px solid var(--blue);
+      background: #f7f9ff;
+      box-shadow: 0 0 0 3px rgba(49, 91, 232, .12);
+    }
+
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #eef1f6;
+      font-size: 25px;
+    }
+
+    .tech-name {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .tech-meta {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tech-skills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .skill {
+      padding: 3px 7px;
+      border-radius: 5px;
+      background: #f1f3f7;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .tech-side {
+      min-width: 108px;
+      text-align: right;
+    }
+
+    .available {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .distance {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .select-button,
+    .confirm-button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 13px;
+      background: var(--blue);
+      color: var(--white);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .select-button {
+      margin-top: 9px;
+    }
+
+    .select-button:hover,
+    .confirm-button.ready:hover {
+      background: var(--blue-hover);
+    }
+
+    .select-button:focus-visible,
+    .confirm-button:focus-visible {
+      outline: 3px solid var(--blue-focus);
+      outline-offset: 2px;
+    }
+
+    .select-button:disabled {
+      opacity: .65;
+      cursor: not-allowed;
+    }
+
+    .footer-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .selection-note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .confirm-button {
+      min-width: 190px;
+      padding: 13px 16px;
+      background: #c8cdd5;
+      cursor: not-allowed;
+    }
+
+    .confirm-button.ready {
+      background: var(--blue);
+      cursor: pointer;
+    }
+
+    .confirm-button:disabled {
+      cursor: not-allowed;
+    }
+
+    .confirmation {
+      display: none;
+      margin-top: 20px;
+      padding: 18px;
+      border: 1px solid #b9e5d1;
+      border-radius: 12px;
+      background: var(--green-bg);
+    }
+
+    .confirmation.show {
+      display: block;
+    }
+
+    .confirmation h3 {
+      margin: 0 0 7px;
+      color: var(--green);
+    }
+
+    .confirmation p {
+      margin: 4px 0;
+    }
+
+    .demo-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 780px) {
+      main {
+        margin-top: 24px;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .request-panel {
+        position: static;
+      }
+    }
+
+    @media (max-width: 520px) {
+      header {
+        padding: 10px 4%;
+      }
+
+      .brand {
+        gap: 10px;
+        font-size: 16px;
+      }
+
+      .brand-logo {
+        width: 54px;
+        height: 38px;
+      }
+
+      .header-label {
+        display: none;
+      }
+
+      .availability-panel,
+      .request-panel {
+        padding: 17px;
+      }
+
+      .tech-card {
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: 11px;
+      }
+
+      .avatar {
+        width: 44px;
+        height: 44px;
+        font-size: 21px;
+      }
+
+      .tech-side {
+        grid-column: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        text-align: left;
+      }
+
+      .distance {
+        margin: 0;
+      }
+
+      .select-button {
+        margin: 0;
+      }
+
+      .footer-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .confirm-button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <img
+        class="brand-logo"
+        src="https://thumb.wikimedia.org/wikipedia/commons/thumb/2/28/CAA_logo.svg/1280px-CAA_logo.svg.png?utm_source=commons.wikimedia.org&amp;utm_campaign=index&amp;utm_content=thumbnail"
+        alt="CAA"
+      >
+      <span>Technician Scheduling</span>
+    </div>
+    <div class="header-label">Roadside Assistance · Agent Workspace</div>
+  </header>
+
+  <main>
+    <div class="page-heading">
+      <h1>Schedule a technician</h1>
+      <div class="subtitle">
+        Find an available technician for the customer’s roadside service request.
+      </div>
+    </div>
+
+    <div class="layout">
+      <aside class="panel request-panel" aria-labelledby="request-title">
+        <h2 id="request-title">Service request</h2>
+
+        <div class="request-item">
+          <span class="label">Customer</span>
+          <div class="value" id="customerName">Loading customer…</div>
+          <div class="muted" id="memberNumber"></div>
+        </div>
+
+        <div class="request-item">
+          <span class="label">Service</span>
+          <div class="value">Battery test</div>
+          <span class="service-tag">At customer location</span>
+        </div>
+
+        <div class="request-item">
+          <span class="label">Service address</span>
+          <div class="value" id="customerStreet">Loading address…</div>
+          <div class="muted" id="customerCity"></div>
+        </div>
+
+        <div class="request-item">
+          <span class="label">Requested appointment</span>
+          <div class="value" id="requestDate"></div>
+          <div class="muted">Customer’s local time</div>
+        </div>
+
+        <div class="customer-status" id="customerLoadStatus" aria-live="polite">
+          Loading customer information…
+        </div>
+      </aside>
+
+      <section class="panel availability-panel" aria-labelledby="availability-title">
+        <div class="availability-heading">
+          <div>
+            <h2 id="availability-title">Available technicians</h2>
+            <div class="muted">
+              Technicians qualified for a battery test in the requested window.
+            </div>
+          </div>
+          <div class="count" id="availabilityCount">3 available</div>
+        </div>
+
+        <div class="slot-banner">
+          <div class="slot-icon" aria-hidden="true">🗓️</div>
+          <div>
+            <div class="slot-title" id="slotDate"></div>
+            <div class="slot-subtitle">Appointment window · Customer location</div>
+          </div>
+        </div>
+
+        <div class="tech-list" id="techList"></div>
+
+        <div class="footer-actions">
+          <div class="selection-note" id="selectionNote" aria-live="polite">
+            Select an available technician to continue.
+          </div>
+          <button class="confirm-button" id="confirmButton" type="button" disabled>
+            Confirm technician
+          </button>
+        </div>
+
+        <div class="confirmation" id="confirmation" role="status" aria-live="polite"></div>
+
+        <div class="demo-note">
+          Demo only: technician availability and appointment confirmation are simulated.
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const technicians = [
+      {
+        id: "tech-101",
+        name: "Alex Morgan",
+        badge: "CAA Technician · 101",
+        distance: "4.2 km away",
+        rating: "⭐ 4.9",
+        avatar: "👨‍🔧",
+        skills: ["Battery testing", "Boost service"]
+      },
+      {
+        id: "tech-204",
+        name: "Priya Singh",
+        badge: "CAA Technician · 204",
+        distance: "6.8 km away",
+        rating: "⭐ 4.8",
+        avatar: "👩‍🔧",
+        skills: ["Battery testing", "Electrical"]
+      },
+      {
+        id: "tech-317",
+        name: "Jordan Chen",
+        badge: "CAA Technician · 317",
+        distance: "8.1 km away",
+        rating: "⭐ 5.0",
+        avatar: "🧑‍🔧",
+        skills: ["Battery testing", "Roadside assistance"]
+      }
+    ];
+
+    let selectedTechnicianId = null;
+    let appointmentConfirmed = false;
+    let customerLoaded = false;
+    let customerInfo = null;
+
+    function getAppointmentDate(now = new Date()) {
+      const date = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+
+      // Today's 2–4 PM slot is used until it has ended.
+      if (now.getHours() >= 16) {
+        date.setDate(date.getDate() + 1);
+      }
+
+      return date;
+    }
+
+    function getAppointmentDateLabel(date, now = new Date()) {
+      const today = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const formattedDate = new Intl.DateTimeFormat(undefined, {
+        weekday: "long",
+        month: "long",
+        day: "numeric"
+      }).format(date);
+
+      if (date.getTime() === today.getTime()) {
+        return `Today · ${formattedDate}`;
+      }
+
+      if (date.getTime() === tomorrow.getTime()) {
+        return `Tomorrow · ${formattedDate}`;
+      }
+
+      return formattedDate;
+    }
+
+    const appointmentDate = getAppointmentDate();
+    const appointmentDateLabel = getAppointmentDateLabel(appointmentDate);
+    const appointmentWindow = `${appointmentDateLabel} · 2:00–4:00 PM`;
+
+    function escapeHTML(value) {
+      return String(value).replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[character]);
+    }
+
+    function firstValue(...values) {
+      return values.find(value =>
+        value !== undefined &&
+        value !== null &&
+        String(value).trim() !== ""
+      );
+    }
+
+    function renderTechnicians() {
+      const list = document.getElementById("techList");
+
+      list.innerHTML = technicians.map(tech => {
+        const selected = selectedTechnicianId === tech.id;
+
+        return `
+          <article class="tech-card ${selected ? "selected" : ""}">
+            <div class="avatar" aria-hidden="true">${tech.avatar}</div>
+
+            <div>
+              <h3 class="tech-name">${escapeHTML(tech.name)}</h3>
+              <div class="tech-meta">
+                ${escapeHTML(tech.badge)} · ${escapeHTML(tech.rating)}
+              </div>
+              <div class="tech-skills">
+                ${tech.skills.map(skill =>
+                  `<span class="skill">${escapeHTML(skill)}</span>`
+                ).join("")}
+              </div>
+            </div>
+
+            <div class="tech-side">
+              <div>
+                <div class="available">● Available</div>
+                <span class="distance">${escapeHTML(tech.distance)}</span>
+              </div>
+
+              <button
+                class="select-button"
+                type="button"
+                data-technician-id="${escapeHTML(tech.id)}"
+                ${appointmentConfirmed ? "disabled" : ""}
+              >
+                ${selected ? "Selected ✓" : "Select"}
+              </button>
+            </div>
+          </article>
+        `;
+      }).join("");
+
+      document.getElementById("availabilityCount").textContent =
+        appointmentConfirmed
+          ? "Appointment booked"
+          : `${technicians.length} available`;
+    }
+
+    async function loadCustomer() {
+      const pageParams = new URLSearchParams(window.location.search);
+      const memberId = pageParams.get("member_id") || "MSS-69662";
+
+      const apiUrl = new URL(
+        "https://caa-crm-dummy.onrender.com/api/members/info"
+      );
+      apiUrl.searchParams.set("member_id", memberId);
+
+      const status = document.getElementById("customerLoadStatus");
+
+      try {
+        status.classList.remove("error");
+        status.textContent = "Loading customer information…";
+
+        const response = await fetch(apiUrl, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`The customer API returned HTTP ${response.status}.`);
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.toLowerCase().includes("application/json")) {
+          throw new Error("The customer API response was not JSON.");
+        }
+
+        const payload = await response.json();
+
+        // Support common API response shapes, such as:
+        // { member: {...} }, { data: {...} }, or a member object directly.
+        const customer =
+          payload.member ||
+          payload.customer ||
+          payload.data?.member ||
+          payload.data?.customer ||
+          payload.data ||
+          payload;
+
+        if (!customer || typeof customer !== "object") {
+          throw new Error("No customer details were found in the API response.");
+        }
+
+        const address =
+          customer.address ||
+          customer.service_address ||
+          customer.serviceAddress ||
+          customer.location ||
+          {};
+
+        const nameFromParts = [
+          firstValue(customer.first_name, customer.firstName, customer.given_name),
+          firstValue(customer.last_name, customer.lastName, customer.family_name)
+        ].filter(Boolean).join(" ");
+
+        const name = firstValue(
+          customer.name,
+          customer.full_name,
+          customer.fullName,
+          nameFromParts
+        );
+
+        const street = typeof address === "string"
+          ? address
+          : firstValue(
+              address.street,
+              address.line1,
+              address.address_line_1,
+              address.addressLine1,
+              address.street_address,
+              customer.street,
+              customer.address_line_1,
+              customer.addressLine1
+            );
+
+        const cityParts = [
+          firstValue(address.city, customer.city),
+          firstValue(
+            address.province,
+            address.state,
+            customer.province,
+            customer.state
+          ),
+          firstValue(
+            address.postal_code,
+            address.postalCode,
+            customer.postal_code,
+            customer.postalCode
+          )
+        ].filter(Boolean);
+
+        customerInfo = {
+          name: name || "CAA Member",
+          memberId: firstValue(
+            customer.member_id,
+            customer.memberId,
+            customer.membership_id,
+            memberId
+          ),
+          street: street || "Address not provided",
+          city: cityParts.join(", ")
+        };
+
+        document.getElementById("customerName").textContent = customerInfo.name;
+        document.getElementById("memberNumber").textContent =
+          `CAA Member · ${customerInfo.memberId}`;
+        document.getElementById("customerStreet").textContent = customerInfo.street;
+        document.getElementById("customerCity").textContent = customerInfo.city;
+
+        customerLoaded = true;
+        status.textContent = "";
+
+        if (selectedTechnicianId && !appointmentConfirmed) {
+          const confirmButton = document.getElementById("confirmButton");
+          confirmButton.disabled = false;
+          confirmButton.classList.add("ready");
+        }
+      } catch (error) {
+        console.error("Could not load customer information:", error);
+
+        customerLoaded = false;
+        status.classList.add("error");
+        status.textContent =
+          `Could not load customer information. ${error.message}`;
+
+        document.getElementById("customerName").textContent =
+          "Customer unavailable";
+        document.getElementById("memberNumber").textContent = "";
+        document.getElementById("customerStreet").textContent =
+          "Address unavailable";
+        document.getElementById("customerCity").textContent = "";
+      }
+    }
+
+    function selectTechnician(id) {
+      if (appointmentConfirmed) return;
+
+      selectedTechnicianId = id;
+      const tech = technicians.find(item => item.id === id);
+      if (!tech) return;
+
+      document.getElementById("selectionNote").textContent =
+        customerLoaded
+          ? `${tech.name} selected · ${appointmentWindow}`
+          : `${tech.name} selected · Waiting for customer information`;
+
+      const confirmButton = document.getElementById("confirmButton");
+      confirmButton.disabled = !customerLoaded;
+      confirmButton.classList.toggle("ready", customerLoaded);
+
+      renderTechnicians();
+    }
+
+    document.getElementById("techList").addEventListener("click", event => {
+      const button = event.target.closest("[data-technician-id]");
+      if (!button) return;
+
+      selectTechnician(button.dataset.technicianId);
+    });
+
+    document.getElementById("confirmButton").addEventListener("click", () => {
+      if (!selectedTechnicianId || !customerLoaded || appointmentConfirmed) {
+        return;
+      }
+
+      const tech = technicians.find(item => item.id === selectedTechnicianId);
+      if (!tech || !customerInfo) return;
+
+      appointmentConfirmed = true;
+
+      const confirmation = document.getElementById("confirmation");
+      confirmation.innerHTML = `
+        <h3>✅ Technician scheduled</h3>
+        <p>
+          <strong>${escapeHTML(tech.name)}</strong> is scheduled for
+          ${escapeHTML(customerInfo.name)}’s battery test.
+        </p>
+        <p><strong>When:</strong> ${escapeHTML(appointmentWindow)}</p>
+        <p>
+          <strong>Where:</strong>
+          ${escapeHTML(customerInfo.street)}
+          ${customerInfo.city ? `, ${escapeHTML(customerInfo.city)}` : ""}
+        </p>
+        <p><strong>Service:</strong> Battery test at customer location</p>
+      `;
+      confirmation.classList.add("show");
+
+      document.getElementById("selectionNote").textContent =
+        "Appointment confirmed for the selected technician.";
+
+      const confirmButton = document.getElementById("confirmButton");
+      confirmButton.disabled = true;
+      confirmButton.classList.remove("ready");
+      confirmButton.textContent = "Appointment confirmed";
+
+      renderTechnicians();
+    });
+
+    document.getElementById("requestDate").textContent = appointmentWindow;
+    document.getElementById("slotDate").textContent = appointmentWindow;
+
+    renderTechnicians();
+    loadCustomer();
+  </script>
+</body>
+</html>
