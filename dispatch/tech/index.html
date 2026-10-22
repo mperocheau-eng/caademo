@@ -132,6 +132,7 @@
 
     .value {
       font-weight: 700;
+      overflow-wrap: anywhere;
     }
 
     .service-tag {
@@ -150,6 +151,7 @@
       margin-top: 8px;
       color: var(--muted);
       font-size: 12px;
+      overflow-wrap: anywhere;
     }
 
     .customer-status.error {
@@ -507,12 +509,19 @@
           <div class="muted">Customer’s local time</div>
         </div>
 
-        <div class="customer-status" id="customerLoadStatus" aria-live="polite">
+        <div
+          class="customer-status"
+          id="customerLoadStatus"
+          aria-live="polite"
+        >
           Loading customer information…
         </div>
       </aside>
 
-      <section class="panel availability-panel" aria-labelledby="availability-title">
+      <section
+        class="panel availability-panel"
+        aria-labelledby="availability-title"
+      >
         <div class="availability-heading">
           <div>
             <h2 id="availability-title">Available technicians</h2>
@@ -527,7 +536,9 @@
           <div class="slot-icon" aria-hidden="true">🗓️</div>
           <div>
             <div class="slot-title" id="slotDate"></div>
-            <div class="slot-subtitle">Appointment window · Customer location</div>
+            <div class="slot-subtitle">
+              Appointment window · Customer location
+            </div>
           </div>
         </div>
 
@@ -537,12 +548,22 @@
           <div class="selection-note" id="selectionNote" aria-live="polite">
             Select an available technician to continue.
           </div>
-          <button class="confirm-button" id="confirmButton" type="button" disabled>
+          <button
+            class="confirm-button"
+            id="confirmButton"
+            type="button"
+            disabled
+          >
             Confirm technician
           </button>
         </div>
 
-        <div class="confirmation" id="confirmation" role="status" aria-live="polite"></div>
+        <div
+          class="confirmation"
+          id="confirmation"
+          role="status"
+          aria-live="polite"
+        ></div>
 
         <div class="demo-note">
           Demo only: technician availability and appointment confirmation are simulated.
@@ -552,6 +573,8 @@
   </main>
 
   <script>
+    "use strict";
+
     const technicians = [
       {
         id: "tech-101",
@@ -582,6 +605,36 @@
       }
     ];
 
+    /*
+     * The page URL can provide:
+     *
+     *   ?member_id=MSS-69662
+     *
+     * Optionally also provide the CRM server origin:
+     *
+     *   &crm_server=https%3A%2F%2Fcaa-crm-dummy.onrender.com
+     *
+     * Keep this host allowlist. It prevents the query parameter from making
+     * the page fetch arbitrary URLs.
+     */
+    const DEFAULT_CRM_SERVER = "https://caa-crm-dummy.onrender.com";
+    const ALLOWED_CRM_HOSTS = new Set([
+      "caa-crm-dummy.onrender.com"
+    ]);
+
+    const pageParams = new URLSearchParams(window.location.search);
+
+    const memberIdFromUrl = (
+      pageParams.get("member_id") ||
+      pageParams.get("memberId") ||
+      ""
+    ).trim();
+
+    const crmServerFromUrl = (
+      pageParams.get("crm_server") ||
+      ""
+    ).trim();
+
     let selectedTechnicianId = null;
     let appointmentConfirmed = false;
     let customerLoaded = false;
@@ -594,7 +647,7 @@
         now.getDate()
       );
 
-      // Today's 2–4 PM slot is used until it has ended.
+      // Demo appointment window: today, unless today's window has ended.
       if (now.getHours() >= 16) {
         date.setDate(date.getDate() + 1);
       }
@@ -630,8 +683,8 @@
     }
 
     const appointmentDate = getAppointmentDate();
-    const appointmentDateLabel = getAppointmentDateLabel(appointmentDate);
-    const appointmentWindow = `${appointmentDateLabel} · 2:00–4:00 PM`;
+    const appointmentWindow =
+      `${getAppointmentDateLabel(appointmentDate)} · 2:00–4:00 PM`;
 
     function escapeHTML(value) {
       return String(value).replace(/[&<>"']/g, character => ({
@@ -651,6 +704,41 @@
       );
     }
 
+    function getCrmEndpoint() {
+      const rawServer = crmServerFromUrl || DEFAULT_CRM_SERVER;
+
+      let serverUrl;
+
+      try {
+        serverUrl = new URL(rawServer);
+      } catch {
+        throw new Error("The crm_server query parameter is not a valid URL.");
+      }
+
+      if (serverUrl.protocol !== "https:") {
+        throw new Error("The CRM server URL must use HTTPS.");
+      }
+
+      if (!ALLOWED_CRM_HOSTS.has(serverUrl.hostname)) {
+        throw new Error(
+          `CRM host "${serverUrl.hostname}" is not allowed.`
+        );
+      }
+
+      // Use only the approved server origin; ignore any path/query supplied.
+      const endpoint = new URL("/api/members/info", serverUrl.origin);
+
+      if (!memberIdFromUrl) {
+        throw new Error(
+          "Missing member_id in this page URL. Add ?member_id=MSS-69662."
+        );
+      }
+
+      endpoint.searchParams.set("member_id", memberIdFromUrl);
+
+      return endpoint.toString();
+    }
+
     function renderTechnicians() {
       const list = document.getElementById("techList");
 
@@ -659,7 +747,9 @@
 
         return `
           <article class="tech-card ${selected ? "selected" : ""}">
-            <div class="avatar" aria-hidden="true">${tech.avatar}</div>
+            <div class="avatar" aria-hidden="true">
+              ${escapeHTML(tech.avatar)}
+            </div>
 
             <div>
               <h3 class="tech-name">${escapeHTML(tech.name)}</h3>
@@ -699,123 +789,103 @@
     }
 
     async function loadCustomer() {
-      const pageParams = new URLSearchParams(window.location.search);
-      const memberId = pageParams.get("member_id") || "MSS-69662";
-
-      const apiUrl = new URL(
-        "https://caa-crm-dummy.onrender.com/api/members/info"
-      );
-      apiUrl.searchParams.set("member_id", memberId);
-
       const status = document.getElementById("customerLoadStatus");
 
       try {
+        customerLoaded = false;
         status.classList.remove("error");
         status.textContent = "Loading customer information…";
 
-        const response = await fetch(apiUrl, {
+        const endpoint = getCrmEndpoint();
+
+        const response = await fetch(endpoint, {
           method: "GET",
           headers: {
-            "Accept": "application/json"
+            Accept: "application/json"
           }
         });
 
         if (!response.ok) {
-          throw new Error(`The customer API returned HTTP ${response.status}.`);
+          const responseText = await response.text().catch(() => "");
+          const detail = responseText
+            ? ` ${responseText.slice(0, 250)}`
+            : "";
+
+          throw new Error(
+            `CRM API returned HTTP ${response.status}.${detail}`
+          );
         }
 
         const contentType = response.headers.get("content-type") || "";
+
         if (!contentType.toLowerCase().includes("application/json")) {
-          throw new Error("The customer API response was not JSON.");
+          throw new Error("CRM API response was not JSON.");
         }
 
-        const payload = await response.json();
-
-        // Support common API response shapes, such as:
-        // { member: {...} }, { data: {...} }, or a member object directly.
-        const customer =
-          payload.member ||
-          payload.customer ||
-          payload.data?.member ||
-          payload.data?.customer ||
-          payload.data ||
-          payload;
+        // The CRM endpoint you provided returns the member object directly.
+        const customer = await response.json();
 
         if (!customer || typeof customer !== "object") {
-          throw new Error("No customer details were found in the API response.");
+          throw new Error("CRM response did not contain a member object.");
         }
 
         const address =
-          customer.address ||
-          customer.service_address ||
-          customer.serviceAddress ||
-          customer.location ||
-          {};
+          customer.address &&
+          typeof customer.address === "object"
+            ? customer.address
+            : {};
 
-        const nameFromParts = [
-          firstValue(customer.first_name, customer.firstName, customer.given_name),
-          firstValue(customer.last_name, customer.lastName, customer.family_name)
-        ].filter(Boolean).join(" ");
-
-        const name = firstValue(
-          customer.name,
-          customer.full_name,
+        const fullName = firstValue(
           customer.fullName,
-          nameFromParts
+          customer.full_name,
+          [
+            firstValue(customer.firstName, customer.first_name),
+            firstValue(customer.lastName, customer.last_name)
+          ].filter(Boolean).join(" ")
         );
 
-        const street = typeof address === "string"
-          ? address
-          : firstValue(
-              address.street,
-              address.line1,
-              address.address_line_1,
-              address.addressLine1,
-              address.street_address,
-              customer.street,
-              customer.address_line_1,
-              customer.addressLine1
-            );
+        const street = [
+          address.number,
+          address.street
+        ].filter(Boolean).join(" ");
 
         const cityParts = [
-          firstValue(address.city, customer.city),
-          firstValue(
-            address.province,
-            address.state,
-            customer.province,
-            customer.state
-          ),
-          firstValue(
-            address.postal_code,
-            address.postalCode,
-            customer.postal_code,
-            customer.postalCode
-          )
+          address.city,
+          customer.province,
+          address.postalCode,
+          customer.country
         ].filter(Boolean);
 
         customerInfo = {
-          name: name || "CAA Member",
+          name: fullName || "CAA Member",
           memberId: firstValue(
             customer.member_id,
-            customer.memberId,
-            customer.membership_id,
-            memberId
+            memberIdFromUrl
           ),
+          phone: customer.phone || "",
           street: street || "Address not provided",
           city: cityParts.join(", ")
         };
 
-        document.getElementById("customerName").textContent = customerInfo.name;
+        document.getElementById("customerName").textContent =
+          customerInfo.name;
+
         document.getElementById("memberNumber").textContent =
-          `CAA Member · ${customerInfo.memberId}`;
-        document.getElementById("customerStreet").textContent = customerInfo.street;
-        document.getElementById("customerCity").textContent = customerInfo.city;
+          `CAA Member · ${customerInfo.memberId || "—"}`;
+
+        document.getElementById("customerStreet").textContent =
+          customerInfo.street;
+
+        document.getElementById("customerCity").textContent =
+          customerInfo.city;
 
         customerLoaded = true;
         status.textContent = "";
 
         if (selectedTechnicianId && !appointmentConfirmed) {
-          const confirmButton = document.getElementById("confirmButton");
+          const confirmButton =
+            document.getElementById("confirmButton");
+
           confirmButton.disabled = false;
           confirmButton.classList.add("ready");
         }
@@ -825,14 +895,23 @@
         customerLoaded = false;
         status.classList.add("error");
         status.textContent =
-          `Could not load customer information. ${error.message}`;
+          `Could not load customer information. ${
+            error instanceof Error ? error.message : "Unknown error."
+          }`;
 
         document.getElementById("customerName").textContent =
           "Customer unavailable";
+
         document.getElementById("memberNumber").textContent = "";
         document.getElementById("customerStreet").textContent =
           "Address unavailable";
         document.getElementById("customerCity").textContent = "";
+
+        const confirmButton =
+          document.getElementById("confirmButton");
+
+        confirmButton.disabled = true;
+        confirmButton.classList.remove("ready");
       }
     }
 
@@ -840,15 +919,18 @@
       if (appointmentConfirmed) return;
 
       selectedTechnicianId = id;
-      const tech = technicians.find(item => item.id === id);
-      if (!tech) return;
+
+      const technician = technicians.find(item => item.id === id);
+      if (!technician) return;
 
       document.getElementById("selectionNote").textContent =
         customerLoaded
-          ? `${tech.name} selected · ${appointmentWindow}`
-          : `${tech.name} selected · Waiting for customer information`;
+          ? `${technician.name} selected · ${appointmentWindow}`
+          : `${technician.name} selected · Waiting for customer information`;
 
-      const confirmButton = document.getElementById("confirmButton");
+      const confirmButton =
+        document.getElementById("confirmButton");
+
       confirmButton.disabled = !customerLoaded;
       confirmButton.classList.toggle("ready", customerLoaded);
 
@@ -856,55 +938,79 @@
     }
 
     document.getElementById("techList").addEventListener("click", event => {
-      const button = event.target.closest("[data-technician-id]");
+      const target = event.target;
+
+      if (!(target instanceof Element)) return;
+
+      const button = target.closest("[data-technician-id]");
       if (!button) return;
 
       selectTechnician(button.dataset.technicianId);
     });
 
-    document.getElementById("confirmButton").addEventListener("click", () => {
-      if (!selectedTechnicianId || !customerLoaded || appointmentConfirmed) {
-        return;
-      }
+    document
+      .getElementById("confirmButton")
+      .addEventListener("click", () => {
+        if (
+          !selectedTechnicianId ||
+          !customerLoaded ||
+          appointmentConfirmed
+        ) {
+          return;
+        }
 
-      const tech = technicians.find(item => item.id === selectedTechnicianId);
-      if (!tech || !customerInfo) return;
+        const technician = technicians.find(
+          item => item.id === selectedTechnicianId
+        );
 
-      appointmentConfirmed = true;
+        if (!technician || !customerInfo) return;
 
-      const confirmation = document.getElementById("confirmation");
-      confirmation.innerHTML = `
-        <h3>✅ Technician scheduled</h3>
-        <p>
-          <strong>${escapeHTML(tech.name)}</strong> is scheduled for
-          ${escapeHTML(customerInfo.name)}’s battery test.
-        </p>
-        <p><strong>When:</strong> ${escapeHTML(appointmentWindow)}</p>
-        <p>
-          <strong>Where:</strong>
-          ${escapeHTML(customerInfo.street)}
-          ${customerInfo.city ? `, ${escapeHTML(customerInfo.city)}` : ""}
-        </p>
-        <p><strong>Service:</strong> Battery test at customer location</p>
-      `;
-      confirmation.classList.add("show");
+        appointmentConfirmed = true;
 
-      document.getElementById("selectionNote").textContent =
-        "Appointment confirmed for the selected technician.";
+        const confirmation =
+          document.getElementById("confirmation");
 
-      const confirmButton = document.getElementById("confirmButton");
-      confirmButton.disabled = true;
-      confirmButton.classList.remove("ready");
-      confirmButton.textContent = "Appointment confirmed";
+        confirmation.innerHTML = `
+          <h3>✅ Technician scheduled</h3>
+          <p>
+            <strong>${escapeHTML(technician.name)}</strong>
+            is scheduled for
+            ${escapeHTML(customerInfo.name)}’s battery test.
+          </p>
+          <p><strong>When:</strong> ${escapeHTML(appointmentWindow)}</p>
+          <p>
+            <strong>Where:</strong>
+            ${escapeHTML(customerInfo.street)}
+            ${customerInfo.city
+              ? `, ${escapeHTML(customerInfo.city)}`
+              : ""}
+          </p>
+          <p><strong>Service:</strong> Battery test at customer location</p>
+        `;
 
-      renderTechnicians();
-    });
+        confirmation.classList.add("show");
 
-    document.getElementById("requestDate").textContent = appointmentWindow;
-    document.getElementById("slotDate").textContent = appointmentWindow;
+        document.getElementById("selectionNote").textContent =
+          "Appointment confirmed for the selected technician.";
+
+        const confirmButton =
+          document.getElementById("confirmButton");
+
+        confirmButton.disabled = true;
+        confirmButton.classList.remove("ready");
+        confirmButton.textContent = "Appointment confirmed";
+
+        renderTechnicians();
+      });
+
+    document.getElementById("requestDate").textContent =
+      appointmentWindow;
+
+    document.getElementById("slotDate").textContent =
+      appointmentWindow;
 
     renderTechnicians();
-    loadCustomer();
+    void loadCustomer();
   </script>
 </body>
 </html>
