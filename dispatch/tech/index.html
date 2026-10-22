@@ -187,15 +187,61 @@
       font-weight: 800;
     }
 
+    .appointment-picker {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0;
+      padding: 16px;
+      border: 1px solid #dce5ff;
+      border-radius: 10px;
+      background: var(--blue-soft);
+    }
+
+    .picker-field {
+      min-width: 0;
+    }
+
+    .picker-label {
+      display: block;
+      margin-bottom: 6px;
+      color: #46536a;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .picker-input {
+      display: block;
+      width: 100%;
+      min-height: 42px;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      background: var(--white);
+      color: var(--ink);
+      font: inherit;
+    }
+
+    .picker-input:focus-visible {
+      outline: 3px solid var(--blue-focus);
+      outline-offset: 2px;
+    }
+
+    .picker-help {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
     .slot-banner {
       display: flex;
       align-items: center;
       gap: 12px;
-      margin: 18px 0;
+      margin: 0 0 18px;
       padding: 14px 16px;
       border: 1px solid #dce5ff;
       border-radius: 10px;
-      background: var(--blue-soft);
+      background: #fff;
     }
 
     .slot-icon {
@@ -420,6 +466,10 @@
         padding: 17px;
       }
 
+      .appointment-picker {
+        grid-template-columns: 1fr;
+      }
+
       .tech-card {
         grid-template-columns: 44px minmax(0, 1fr);
         gap: 11px;
@@ -501,12 +551,13 @@
           <span class="label">Service address</span>
           <div class="value" id="customerStreet">Loading address…</div>
           <div class="muted" id="customerCity"></div>
+          <div class="muted" id="customerPhone"></div>
         </div>
 
         <div class="request-item">
           <span class="label">Requested appointment</span>
-          <div class="value" id="requestDate"></div>
-          <div class="muted">Customer’s local time</div>
+          <div class="value" id="requestDate">Choose a date and time</div>
+          <div class="muted">Displayed in this browser’s local time</div>
         </div>
 
         <div
@@ -518,24 +569,59 @@
         </div>
       </aside>
 
-      <section
-        class="panel availability-panel"
-        aria-labelledby="availability-title"
-      >
+      <section class="panel availability-panel" aria-labelledby="availability-title">
         <div class="availability-heading">
           <div>
             <h2 id="availability-title">Available technicians</h2>
             <div class="muted">
-              Technicians qualified for a battery test in the requested window.
+              Technicians qualified for a battery test in the selected window.
             </div>
           </div>
           <div class="count" id="availabilityCount">3 available</div>
         </div>
 
+        <div class="appointment-picker">
+          <div class="picker-field">
+            <label class="picker-label" for="appointmentDate">
+              Appointment date
+            </label>
+            <input
+              class="picker-input"
+              id="appointmentDate"
+              type="date"
+              required
+              aria-describedby="dateHelp"
+            >
+            <div class="picker-help" id="dateHelp">
+              Choose one of the next three days.
+            </div>
+          </div>
+
+          <div class="picker-field">
+            <label class="picker-label" for="appointmentTime">
+              Time slot
+            </label>
+            <select
+              class="picker-input"
+              id="appointmentTime"
+              required
+            >
+              <option value="">Choose a time slot…</option>
+              <option value="09:00-11:00">9:00–11:00 AM</option>
+              <option value="11:00-13:00">11:00 AM–1:00 PM</option>
+              <option value="13:00-15:00">1:00–3:00 PM</option>
+              <option value="15:00-17:00">3:00–5:00 PM</option>
+            </select>
+            <div class="picker-help">Two-hour appointment window.</div>
+          </div>
+        </div>
+
         <div class="slot-banner">
           <div class="slot-icon" aria-hidden="true">🗓️</div>
           <div>
-            <div class="slot-title" id="slotDate"></div>
+            <div class="slot-title" id="slotDate">
+              Choose a date and time slot
+            </div>
             <div class="slot-subtitle">
               Appointment window · Customer location
             </div>
@@ -546,7 +632,7 @@
 
         <div class="footer-actions">
           <div class="selection-note" id="selectionNote" aria-live="polite">
-            Select an available technician to continue.
+            Select a date, time slot, and technician to continue.
           </div>
           <button
             class="confirm-button"
@@ -605,25 +691,12 @@
       }
     ];
 
-    /*
-     * The page URL can provide:
-     *
-     *   ?member_id=MSS-69662
-     *
-     * Optionally also provide the CRM server origin:
-     *
-     *   &crm_server=https%3A%2F%2Fcaa-crm-dummy.onrender.com
-     *
-     * Keep this host allowlist. It prevents the query parameter from making
-     * the page fetch arbitrary URLs.
-     */
     const DEFAULT_CRM_SERVER = "https://caa-crm-dummy.onrender.com";
     const ALLOWED_CRM_HOSTS = new Set([
       "caa-crm-dummy.onrender.com"
     ]);
 
     const pageParams = new URLSearchParams(window.location.search);
-
     const memberIdFromUrl = (
       pageParams.get("member_id") ||
       pageParams.get("memberId") ||
@@ -631,8 +704,7 @@
     ).trim();
 
     const crmServerFromUrl = (
-      pageParams.get("crm_server") ||
-      ""
+      pageParams.get("crm_server") || ""
     ).trim();
 
     let selectedTechnicianId = null;
@@ -640,51 +712,72 @@
     let customerLoaded = false;
     let customerInfo = null;
 
-    function getAppointmentDate(now = new Date()) {
-      const date = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      );
+    const dateInput = document.getElementById("appointmentDate");
+    const timeInput = document.getElementById("appointmentTime");
+    const confirmButton = document.getElementById("confirmButton");
 
-      // Demo appointment window: today, unless today's window has ended.
-      if (now.getHours() >= 16) {
-        date.setDate(date.getDate() + 1);
-      }
-
-      return date;
+    function toLocalDateInputValue(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
     }
 
-    function getAppointmentDateLabel(date, now = new Date()) {
-      const today = new Date(
+    function getDateLimits(now = new Date()) {
+      const tomorrow = new Date(
         now.getFullYear(),
         now.getMonth(),
-        now.getDate()
+        now.getDate() + 1
       );
 
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const thirdDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 3
+      );
 
-      const formattedDate = new Intl.DateTimeFormat(undefined, {
+      return {
+        min: toLocalDateInputValue(tomorrow),
+        max: toLocalDateInputValue(thirdDay)
+      };
+    }
+
+    function parseLocalDate(value) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+      if (!match) return null;
+
+      return new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3])
+      );
+    }
+
+    function formatAppointmentDate(date) {
+      if (!date) return "";
+
+      return new Intl.DateTimeFormat(undefined, {
         weekday: "long",
         month: "long",
         day: "numeric"
       }).format(date);
-
-      if (date.getTime() === today.getTime()) {
-        return `Today · ${formattedDate}`;
-      }
-
-      if (date.getTime() === tomorrow.getTime()) {
-        return `Tomorrow · ${formattedDate}`;
-      }
-
-      return formattedDate;
     }
 
-    const appointmentDate = getAppointmentDate();
-    const appointmentWindow =
-      `${getAppointmentDateLabel(appointmentDate)} · 2:00–4:00 PM`;
+    function getSelectedTimeLabel() {
+      const selectedOption = timeInput.selectedOptions[0];
+      return selectedOption && selectedOption.value
+        ? selectedOption.textContent
+        : "";
+    }
+
+    function getAppointmentLabel() {
+      const date = parseLocalDate(dateInput.value);
+      const time = getSelectedTimeLabel();
+
+      if (!date || !time) return "";
+
+      return `${formatAppointmentDate(date)} · ${time}`;
+    }
 
     function escapeHTML(value) {
       return String(value).replace(/[&<>"']/g, character => ({
@@ -721,22 +814,74 @@
 
       if (!ALLOWED_CRM_HOSTS.has(serverUrl.hostname)) {
         throw new Error(
-          `CRM host "${serverUrl.hostname}" is not allowed.`
+          `CRM host "${serverUrl.hostname}" is not on the allowed list.`
         );
       }
-
-      // Use only the approved server origin; ignore any path/query supplied.
-      const endpoint = new URL("/api/members/info", serverUrl.origin);
 
       if (!memberIdFromUrl) {
         throw new Error(
-          "Missing member_id in this page URL. Add ?member_id=MSS-69662."
+          "Missing member_id in the page URL. Add ?member_id=MSS-69662."
         );
       }
+
+      const endpoint = new URL(
+        "/api/members/info",
+        serverUrl.origin
+      );
 
       endpoint.searchParams.set("member_id", memberIdFromUrl);
 
       return endpoint.toString();
+    }
+
+    function updateAppointmentDisplay() {
+      const appointmentLabel = getAppointmentLabel();
+
+      document.getElementById("requestDate").textContent =
+        appointmentLabel || "Choose a date and time";
+
+      document.getElementById("slotDate").textContent =
+        appointmentLabel || "Choose a date and time slot";
+
+      updateConfirmButton();
+    }
+
+    function updateConfirmButton() {
+      const hasAppointment =
+        Boolean(dateInput.value) && Boolean(timeInput.value);
+
+      const canConfirm =
+        customerLoaded &&
+        Boolean(selectedTechnicianId) &&
+        hasAppointment &&
+        !appointmentConfirmed;
+
+      confirmButton.disabled = !canConfirm;
+      confirmButton.classList.toggle("ready", canConfirm);
+
+      if (appointmentConfirmed) {
+        document.getElementById("selectionNote").textContent =
+          "Appointment confirmed for the selected technician.";
+        return;
+      }
+
+      if (!selectedTechnicianId) {
+        document.getElementById("selectionNote").textContent =
+          "Select a technician to continue.";
+      } else if (!hasAppointment) {
+        document.getElementById("selectionNote").textContent =
+          "Select an appointment date and time slot to continue.";
+      } else if (!customerLoaded) {
+        document.getElementById("selectionNote").textContent =
+          "Waiting for customer information.";
+      } else {
+        const technician = technicians.find(
+          item => item.id === selectedTechnicianId
+        );
+
+        document.getElementById("selectionNote").textContent =
+          `${technician?.name || "Technician"} selected · ${getAppointmentLabel()}`;
+      }
     }
 
     function renderTechnicians() {
@@ -808,7 +953,7 @@
         if (!response.ok) {
           const responseText = await response.text().catch(() => "");
           const detail = responseText
-            ? ` ${responseText.slice(0, 250)}`
+            ? ` ${responseText.slice(0, 200)}`
             : "";
 
           throw new Error(
@@ -822,7 +967,7 @@
           throw new Error("CRM API response was not JSON.");
         }
 
-        // The CRM endpoint you provided returns the member object directly.
+        // The CRM endpoint returns the member object directly.
         const customer = await response.json();
 
         if (!customer || typeof customer !== "object") {
@@ -835,7 +980,7 @@
             ? customer.address
             : {};
 
-        const fullName = firstValue(
+        const name = firstValue(
           customer.fullName,
           customer.full_name,
           [
@@ -857,11 +1002,8 @@
         ].filter(Boolean);
 
         customerInfo = {
-          name: fullName || "CAA Member",
-          memberId: firstValue(
-            customer.member_id,
-            memberIdFromUrl
-          ),
+          name: name || "CAA Member",
+          memberId: firstValue(customer.member_id, memberIdFromUrl),
           phone: customer.phone || "",
           street: street || "Address not provided",
           city: cityParts.join(", ")
@@ -879,16 +1021,15 @@
         document.getElementById("customerCity").textContent =
           customerInfo.city;
 
+        document.getElementById("customerPhone").textContent =
+          customerInfo.phone
+            ? `Phone · ${customerInfo.phone}`
+            : "";
+
         customerLoaded = true;
         status.textContent = "";
 
-        if (selectedTechnicianId && !appointmentConfirmed) {
-          const confirmButton =
-            document.getElementById("confirmButton");
-
-          confirmButton.disabled = false;
-          confirmButton.classList.add("ready");
-        }
+        updateConfirmButton();
       } catch (error) {
         console.error("Could not load customer information:", error);
 
@@ -906,12 +1047,9 @@
         document.getElementById("customerStreet").textContent =
           "Address unavailable";
         document.getElementById("customerCity").textContent = "";
+        document.getElementById("customerPhone").textContent = "";
 
-        const confirmButton =
-          document.getElementById("confirmButton");
-
-        confirmButton.disabled = true;
-        confirmButton.classList.remove("ready");
+        updateConfirmButton();
       }
     }
 
@@ -919,22 +1057,8 @@
       if (appointmentConfirmed) return;
 
       selectedTechnicianId = id;
-
-      const technician = technicians.find(item => item.id === id);
-      if (!technician) return;
-
-      document.getElementById("selectionNote").textContent =
-        customerLoaded
-          ? `${technician.name} selected · ${appointmentWindow}`
-          : `${technician.name} selected · Waiting for customer information`;
-
-      const confirmButton =
-        document.getElementById("confirmButton");
-
-      confirmButton.disabled = !customerLoaded;
-      confirmButton.classList.toggle("ready", customerLoaded);
-
       renderTechnicians();
+      updateConfirmButton();
     }
 
     document.getElementById("techList").addEventListener("click", event => {
@@ -948,67 +1072,72 @@
       selectTechnician(button.dataset.technicianId);
     });
 
-    document
-      .getElementById("confirmButton")
-      .addEventListener("click", () => {
-        if (
-          !selectedTechnicianId ||
-          !customerLoaded ||
-          appointmentConfirmed
-        ) {
-          return;
-        }
+    dateInput.addEventListener("change", updateAppointmentDisplay);
+    timeInput.addEventListener("change", updateAppointmentDisplay);
 
-        const technician = technicians.find(
-          item => item.id === selectedTechnicianId
-        );
+    confirmButton.addEventListener("click", () => {
+      if (
+        !selectedTechnicianId ||
+        !customerLoaded ||
+        !dateInput.value ||
+        !timeInput.value ||
+        appointmentConfirmed
+      ) {
+        return;
+      }
 
-        if (!technician || !customerInfo) return;
+      const technician = technicians.find(
+        item => item.id === selectedTechnicianId
+      );
 
-        appointmentConfirmed = true;
+      if (!technician || !customerInfo) return;
 
-        const confirmation =
-          document.getElementById("confirmation");
+      appointmentConfirmed = true;
 
-        confirmation.innerHTML = `
-          <h3>✅ Technician scheduled</h3>
-          <p>
-            <strong>${escapeHTML(technician.name)}</strong>
-            is scheduled for
-            ${escapeHTML(customerInfo.name)}’s battery test.
-          </p>
-          <p><strong>When:</strong> ${escapeHTML(appointmentWindow)}</p>
-          <p>
-            <strong>Where:</strong>
-            ${escapeHTML(customerInfo.street)}
-            ${customerInfo.city
-              ? `, ${escapeHTML(customerInfo.city)}`
-              : ""}
-          </p>
-          <p><strong>Service:</strong> Battery test at customer location</p>
-        `;
+      const appointmentLabel = getAppointmentLabel();
+      const confirmation = document.getElementById("confirmation");
 
-        confirmation.classList.add("show");
+      confirmation.innerHTML = `
+        <h3>✅ Technician scheduled</h3>
+        <p>
+          <strong>${escapeHTML(technician.name)}</strong>
+          is scheduled for
+          ${escapeHTML(customerInfo.name)}’s battery test.
+        </p>
+        <p><strong>When:</strong> ${escapeHTML(appointmentLabel)}</p>
+        <p>
+          <strong>Where:</strong>
+          ${escapeHTML(customerInfo.street)}
+          ${customerInfo.city
+            ? `, ${escapeHTML(customerInfo.city)}`
+            : ""}
+        </p>
+        <p><strong>Service:</strong> Battery test at customer location</p>
+      `;
 
-        document.getElementById("selectionNote").textContent =
-          "Appointment confirmed for the selected technician.";
+      confirmation.classList.add("show");
 
-        const confirmButton =
-          document.getElementById("confirmButton");
+      document.getElementById("selectionNote").textContent =
+        "Appointment confirmed for the selected technician.";
 
-        confirmButton.disabled = true;
-        confirmButton.classList.remove("ready");
-        confirmButton.textContent = "Appointment confirmed";
+      confirmButton.disabled = true;
+      confirmButton.classList.remove("ready");
+      confirmButton.textContent = "Appointment confirmed";
 
-        renderTechnicians();
-      });
+      renderTechnicians();
+    });
 
-    document.getElementById("requestDate").textContent =
-      appointmentWindow;
+    function initializeDatePicker() {
+      const limits = getDateLimits();
 
-    document.getElementById("slotDate").textContent =
-      appointmentWindow;
+      dateInput.min = limits.min;
+      dateInput.max = limits.max;
+      dateInput.value = limits.min;
 
+      updateAppointmentDisplay();
+    }
+
+    initializeDatePicker();
     renderTechnicians();
     void loadCustomer();
   </script>
